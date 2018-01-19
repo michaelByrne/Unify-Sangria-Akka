@@ -15,6 +15,10 @@ libraryDependencies ++= Seq(
   "org.scalatest" %% "scalatest" % "3.0.4" % Test
 )
 
+herokuProcessTypes in Compile := Map(
+  "web" -> "target/universal/stage/bin/unify-id -Dhttp.port=$PORT",
+)
+
 Revolver.settings
 enablePlugins(JavaAppPackaging)
 
