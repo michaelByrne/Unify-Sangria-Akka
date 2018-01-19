@@ -1,0 +1,7 @@
+{
+  "name": "Unify ID",
+  "description": "Sangria and akka server for UnifyID.",
+  "repository": "",
+  "logo": "",
+  "keywords": ["scala", "sangria", "graphql"]
+}
