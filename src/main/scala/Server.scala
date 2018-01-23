@@ -30,19 +30,23 @@ object Server extends App {
           case JsString(op) ⇒ op
         }
 
+        //println(operation)
+
         val vars = fields.get("variables") match {
           case Some(obj: JsObject) ⇒ obj
           case _ ⇒ JsObject.empty
         }
 
+        //println(vars)
+
         QueryParser.parse(query) match {
 
           // query parsed successfully, time to execute it!
           case Success(queryAst) ⇒
-            complete(Executor.execute(SchemaDefinition.UnifySchema, queryAst, new UserRepo,
+            complete(Executor.execute(SchemaDefinition.UnifySchema, queryAst, new SiteRepo,
                 variables = vars,
                 operationName = operation,
-                deferredResolver = DeferredResolver.fetchers(SchemaDefinition.users))
+                deferredResolver = DeferredResolver.fetchers(SchemaDefinition.sites))
               .map(OK → _)
               .recover {
                 case error: QueryAnalysisError ⇒ BadRequest → error.resolveError

@@ -15,6 +15,9 @@ libraryDependencies ++= Seq(
   "org.scalatest" %% "scalatest" % "3.0.4" % Test
 )
 
+libraryDependencies += "org.sangria-graphql" %% "sangria-play-json" % "1.0.4"
+
+
 herokuProcessTypes in Compile := Map(
   "web" -> "target/universal/stage/bin/unify-id -Dhttp.port=$PORT",
 )

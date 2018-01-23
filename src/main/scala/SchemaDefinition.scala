@@ -3,71 +3,99 @@ import sangria.schema._
 
 import scala.concurrent.Future
 
+import sangria.macros.derive._
+
+import sangria.marshalling.playJson._
+import play.api.libs.json._
+
+
 
 object SchemaDefinition {
 
-  val users = Fetcher.caching(
-    (ctx: UserRepo, ids: Seq[String]) ⇒
-      Future.successful(ids.flatMap(id ⇒ ctx.getUnifyUser(id) orElse None)))(HasId(_.id))
+  val sites = Fetcher.caching(
+    (ctx: SiteRepo, ids: Seq[String]) ⇒
+      Future.successful(ids.flatMap(id ⇒ ctx.getSite(id) orElse None)))(HasId(_.id))
 
-  val CredentialEnum = EnumType(
-    "Credential",
-    Some("A credential managed by UnifyID"),
-    List(
-      EnumValue("YOUTUBE",
-        value = Credential.YOUTUBE,
-        description = Some("Personal YouTube account")),
-      EnumValue("HBO",
-        value = Credential.HBO,
-        description = Some("HBO Go account")),
-      EnumValue("NETFLIX",
-        value = Credential.NETFLIX,
-        description = Some("Netflix streaming account"))))
 
-  val User: InterfaceType[UserRepo, User] =
-    InterfaceType(
-      "User",
-      "A UnifyID user",
-      () ⇒ fields[UserRepo, User](
-        Field("id", StringType,
-          Some("The id of the user."),
-          resolve = _.value.id),
-        Field("name", StringType,
-          Some("The name of the user."),
-          resolve = _.value.name),
-        Field("appearsIn", OptionType(ListType(OptionType(CredentialEnum))),
-          Some("Which credentials a user is named in"),
-          resolve = _.value.appearsIn map (e ⇒ Some(e)))
-      ))
+  val IdentifiableType = InterfaceType(
+    "Identifiable",
+    "Entity that can be identified",
+    fields[Unit, Identifiable](
+      Field("id", StringType, resolve = _.value.id)))
 
-  val UnifyUser =
+  val UserType =
     ObjectType(
-      "UnifyUser",
+      "User",
       "A Unify user.",
-      interfaces[UserRepo, UnifyUser](User),
-      fields[UserRepo, UnifyUser](
+      fields[UserRepo, User](
         Field("id", StringType,
           Some("The id of the user."),
           resolve = _.value.id),
         Field("name", StringType,
           Some("The name of the user."),
           resolve = _.value.name),
-        Field("appearsIn", OptionType(ListType(OptionType(CredentialEnum))),
-          Some("Which credentials they appear in."),
-          resolve = _.value.appearsIn map (e ⇒ Some(e))),
       ))
 
-  val ID = Argument("id", StringType, description = "id of the user")
 
-  val CredentialArg = Argument("credential", StringType,
-    description = "Nothing so far")
+  val SiteType =
+    ObjectType(
+      "Site",
+      "A website credential.",
+      fields[SiteRepo, Site](
+        Field("id", StringType,
+          Some("The id of the site."),
+          resolve = _.value.id),
+        Field("website", StringType,
+          Some("The url of the website."),
+          resolve = _.value.url),
+        Field("users", ListType(UserType),
+          Some("Current users of credential"),
+          resolve = _.value.users),
+        Field("shared_with", ListType(UserType),
+          Some("Non-owner users"),
+          resolve = _.value.shared_with),
+        Field("shared_by", UserType,
+          Some("Who loaned the credential if applicable"),
+          resolve = _.value.shared_by),
+      ))
+
+  implicit val userFormat = Json.format[User]
+
+  val UserInputType = deriveInputObjectType[User](
+    InputObjectTypeName("user"),
+    InputObjectTypeDescription("A unify user"),
+  )
+
+  val ID = Argument("id", StringType, description = "id of the site")
+  val URL = Argument("url", StringType, description = "url of credential site")
+  val USERS = Argument("users", ListInputType(UserInputType), description = "the users of the credential")
+  val USER = Argument("user", UserInputType, description = "a unify user")
+
+
 
   val Query = ObjectType(
-    "Query", fields[UserRepo, Unit](
-      Field("unify_user", OptionType(UnifyUser),
+    "Query", fields[SiteRepo, Unit](
+      Field("site", OptionType(SiteType),
         arguments = ID :: Nil,
-        resolve = ctx ⇒ ctx.ctx.getUnifyUser(ctx arg ID)),
-    ))
+        resolve = c ⇒ c.ctx.getSite(c arg ID)),
+      Field("sites", OptionType(ListType(SiteType)),
+        arguments = Nil,
+        resolve = c ⇒ c.ctx.getSites(),
+    )))
 
-  val UnifySchema = Schema(Query)
+  val Mutation = ObjectType(
+    "Mutation", fields[SiteRepo, Unit](
+      Field("addSite", OptionType(SiteType),
+        arguments = URL :: USERS :: Nil,
+        resolve = c => c.ctx.addSite(c.arg(URL), c.arg(USERS))
+      ),
+      Field("addUserToCredential", OptionType(SiteType),
+        arguments = ID :: USER :: Nil,
+        resolve = c => c.ctx.addUserToCredential(c.arg(ID), c.arg(USER))
+      ),
+
+    )
+  )
+
+  val UnifySchema = Schema(Query, Some(Mutation))
 }
