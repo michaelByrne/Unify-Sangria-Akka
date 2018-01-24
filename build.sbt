@@ -17,6 +17,9 @@ libraryDependencies ++= Seq(
 
 libraryDependencies += "org.sangria-graphql" %% "sangria-play-json" % "1.0.4"
 
+libraryDependencies += "ch.megard" %% "akka-http-cors" % "0.2.2"
+
+
 
 herokuProcessTypes in Compile := Map(
   "web" -> "target/universal/stage/bin/unify-id -Dhttp.port=$PORT",

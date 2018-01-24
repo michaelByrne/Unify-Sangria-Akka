@@ -10,6 +10,11 @@ import sangria.parser.QueryParser
 import sangria.execution.{ErrorWithResolver, Executor, QueryAnalysisError}
 import sangria.marshalling.sprayJson._
 import spray.json._
+import ch.megard.akka.http.cors.scaladsl.settings.CorsSettings
+import akka.http.scaladsl.model.headers.{HttpOrigin, HttpOriginRange}
+
+import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
+
 
 import scala.util.{Failure, Success}
 
@@ -19,49 +24,60 @@ object Server extends App {
 
   import system.dispatcher
 
+  val corsSettings = CorsSettings.defaultSettings.copy(
+    allowedOrigins = HttpOriginRange.*
+  )
+
   val route: Route =
-    (post & path("graphql")) {
-      entity(as[JsValue]) { requestJson ⇒
-        val JsObject(fields) = requestJson
+    cors(corsSettings) {
+      (post & path("graphql")) {
 
-        val JsString(query) = fields("query")
 
-        val operation = fields.get("operationName") collect {
-          case JsString(op) ⇒ op
-        }
+        // Your CORS settings
 
-        //println(operation)
 
-        val vars = fields.get("variables") match {
-          case Some(obj: JsObject) ⇒ obj
-          case _ ⇒ JsObject.empty
-        }
+        entity(as[JsValue]) { requestJson ⇒
+          val JsObject(fields) = requestJson
 
-        //println(vars)
+          val JsString(query) = fields("query")
 
-        QueryParser.parse(query) match {
+          val operation = fields.get("operationName") collect {
+            case JsString(op) ⇒ op
+          }
 
-          // query parsed successfully, time to execute it!
-          case Success(queryAst) ⇒
-            complete(Executor.execute(SchemaDefinition.UnifySchema, queryAst, new SiteRepo,
+          //println(operation)
+
+          val vars = fields.get("variables") match {
+            case Some(obj: JsObject) ⇒ obj
+            case _ ⇒ JsObject.empty
+          }
+
+          //println(vars)
+
+          QueryParser.parse(query) match {
+
+            // query parsed successfully, time to execute it!
+            case Success(queryAst) ⇒
+              complete(Executor.execute(SchemaDefinition.UnifySchema, queryAst, new SiteRepo,
                 variables = vars,
                 operationName = operation,
                 deferredResolver = DeferredResolver.fetchers(SchemaDefinition.sites))
-              .map(OK → _)
-              .recover {
-                case error: QueryAnalysisError ⇒ BadRequest → error.resolveError
-                case error: ErrorWithResolver ⇒ InternalServerError → error.resolveError
-              })
+                .map(OK → _)
+                .recover {
+                  case error: QueryAnalysisError ⇒ BadRequest → error.resolveError
+                  case error: ErrorWithResolver ⇒ InternalServerError → error.resolveError
+                })
 
-          // can't parse GraphQL query, return error
-          case Failure(error) ⇒
-            complete(BadRequest, JsObject("error" → JsString(error.getMessage)))
+            // can't parse GraphQL query, return error
+            case Failure(error) ⇒
+              complete(BadRequest, JsObject("error" → JsString(error.getMessage)))
+          }
         }
       }
     } ~
-    get {
-      getFromResource("graphiql.html")
-    }
+      get {
+        getFromResource("graphiql.html")
+      }
 
   Http().bindAndHandle(route, "0.0.0.0", sys.props.get("http.port").fold(8080)(_.toInt))
 }
